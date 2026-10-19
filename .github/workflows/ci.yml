@@ -64,7 +64,7 @@ jobs:
         
     - name: Execute Ruff Linter Security Validation
       run: |
-        # Configure ruff for fintech security standards
+        # Configure ruff for fintech security standards (UP047 removed - not supported)
         cat > ruff.toml << EOF
         target-version = "py313"
         line-length = 100
@@ -81,7 +81,7 @@ jobs:
           "SIM", # flake8-simplify
           "TCH", # flake8-type-checking
         ]
-        ignore = ["UP047"]
+        ignore = []
         
         [lint.isort]
         known-first-party = ["ai_sre"]
@@ -118,6 +118,26 @@ jobs:
         # Perform comprehensive type analysis
         mypy src/ai_sre tests --config-file=mypy.ini --no-error-summary --show-error-codes
         
+    - name: Set Up Python Path for Test Discovery
+      run: |
+        # Configure Python path for proper module discovery
+        export PYTHONPATH="${PWD}:${PYTHONPATH}"
+        echo "📍 Python path configured:"
+        echo "   - Current directory: ${PWD}"
+        echo "   - PYTHONPATH: ${PYTHONPATH}"
+        
+        # Verify directory structure
+        echo "🔍 Checking project structure:"
+        echo "   - src/ai_sre exists: $(test -d 'src/ai_sre' && echo '✅' || echo '❌')"
+        echo "   - tests exists: $(test -d 'tests' && echo '✅' || echo '❌')"
+        echo "   - test files in tests/: $(find tests -name '*.py' -type f | head -5 | wc -l) files"
+        
+        # List source modules for verification
+        echo "📦 Source modules found:"
+        find src/ai_sre -name "*.py" -type f | head -10
+        echo "🧪 Test modules found:"
+        find tests -name "*.py" -type f | head -10
+        
     - name: Execute Comprehensive Test Suite with Coverage
       run: |
         # Set up test environment variables for security testing
@@ -126,10 +146,14 @@ jobs:
         export AI_SRE_GATE_SECRET="test-secret-key-32chars"
         export AI_SRE_SALT="test-salt-key-32chars"
         
+        # Configure Python path for pytest
+        export PYTHONPATH="${PWD}:${PYTHONPATH}"
+        
         # Create necessary test directories
         mkdir -p data/lancedb data/audit
         
         # Execute pytest with EXACT coverage generation as specified
+        echo "🧪 Running pytest with full discovery..."
         pytest tests/ -v --tb=short --cov=src/ai_sre --cov-report=xml --cov-report=html
         
         # Verify coverage reports were generated
@@ -141,6 +165,8 @@ jobs:
           echo "❌ CRITICAL: Coverage reports not generated!"
           echo "Available files:"
           find . -name "*.xml" -o -name "htmlcov" -type d 2>/dev/null | head -10
+          echo "🔍 Directory structure:"
+          find . -type d -name "src" -o -name "tests" | head -5
           exit 1
         fi
         
@@ -220,7 +246,7 @@ jobs:
         ## Build Metadata
         - Runner: Ubuntu 24.04 LTS
         - Python: 3.13
-        - Pipeline Version: 2.1.1
+        - Pipeline Version: 2.1.2
         - Build Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
         EOF
         
