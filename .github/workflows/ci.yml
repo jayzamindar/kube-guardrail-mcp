@@ -88,7 +88,7 @@ jobs:
         EOF
         
         # Execute ruff with comprehensive error reporting
-        ruff check src/ai_sre tests --output-format=github --statistics
+        ruff check src/ai_sre tests --output-format=github
         
     - name: Perform Mypy Static Type Analysis
       run: |
@@ -277,4 +277,3 @@ jobs:
         # Clean up temporary files to maintain workspace size
         rm -rf data/lancedb data/audit .coverage .pytest_cache
         echo "✅ Cleanup completed"
-        
