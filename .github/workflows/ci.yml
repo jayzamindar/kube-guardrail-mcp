@@ -1,5 +1,5 @@
-# File: .github/workflows/ci.yml
 name: Kube-Guardrail-MCP CI Pipeline
+
 on:
   push:
     branches: [main]
@@ -22,7 +22,7 @@ jobs:
     - name: Set up Python Environment
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: ${{ matrix.matrix.python-version }}
         cache: "pip"
         cache-dependency-path: |
           **/pyproject.toml
@@ -31,15 +31,12 @@ jobs:
     - name: Configure Git Identity
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.email "github-actions[bot]@://github.com"
         
     - name: Security-Validated Dependency Installation
       run: |
-        # Update pip to latest security patches (compatible with Ubuntu 24.04)
         python -m pip install --upgrade pip --no-cache-dir
         pip install --upgrade setuptools wheel --no-cache-dir
-        
-        # Install core fintech-grade dependencies with version constraints
         pip install --no-cache-dir \
           ruff==0.9.0 \
           mypy==1.14.0 \
@@ -53,33 +50,19 @@ jobs:
           opentelemetry-api==1.30.0 \
           opentelemetry-sdk==1.30.0 \
           cryptography==44.0.0
-        
-        # Install project-specific dependencies
         if [ -f requirements.txt ]; then
           pip install --no-cache-dir -r requirements.txt
         fi
         
-        # Verify installation and compatibility
-        python -c "import ruff, mypy, pytest, pydantic, lancedb, fastembed, kubernetes_asyncio, pydantic_settings; print('✓ All core dependencies installed successfully')"
-        
     - name: Execute Ruff Linter Security Validation
       run: |
-        # Configure ruff for fintech security standards (UP047 removed - not supported)
         cat > ruff.toml << EOF
         target-version = "py313"
         line-length = 100
         
         [lint]
         select = [
-          "E",   # pycodestyle errors
-          "W",   # pycodestyle warnings  
-          "F",   # pyflakes
-          "I",   # isort
-          "B",   # flake8-bugbear
-          "C4",  # flake8-comprehensions
-          "UP",  # pyupgrade
-          "SIM", # flake8-simplify
-          "TCH", # flake8-type-checking
+          "E", "W", "F", "I", "B", "C4", "UP", "SIM", "TCH"
         ]
         ignore = []
         
@@ -87,12 +70,10 @@ jobs:
         known-first-party = ["ai_sre"]
         EOF
         
-        # Execute ruff with comprehensive error reporting
         ruff check src/ai_sre tests --output-format=github
         
     - name: Perform Mypy Static Type Analysis
       run: |
-        # Configure mypy for strict fintech compliance
         cat > mypy.ini << EOF
         [mypy]
         python_version = "3.13"
@@ -115,165 +96,13 @@ jobs:
         ignore_missing_imports = true
         EOF
         
-        # Perform comprehensive type analysis
-        mypy src/ai_sre tests --config-file=mypy.ini --no-error-summary --show-error-codes
+        mypy src/ai_sre tests --config-file=mypy.ini
         
-    - name: Set Up Python Path for Test Discovery
+    - name: Execute Comprehensive Test Suite
       run: |
-        # Configure Python path for proper module discovery
-        export PYTHONPATH="${PWD}:${PYTHONPATH}"
-        echo "📍 Python path configured:"
-        echo "   - Current directory: ${PWD}"
-        echo "   - PYTHONPATH: ${PYTHONPATH}"
-        
-        # Verify directory structure
-        echo "🔍 Checking project structure:"
-        echo "   - src/ai_sre exists: $(test -d 'src/ai_sre' && echo '✅' || echo '❌')"
-        echo "   - tests exists: $(test -d 'tests' && echo '✅' || echo '❌')"
-        echo "   - test files in tests/: $(find tests -name '*.py' -type f | head -5 | wc -l) files"
-        
-        # List source modules for verification
-        echo "📦 Source modules found:"
-        find src/ai_sre -name "*.py" -type f | head -10
-        echo "🧪 Test modules found:"
-        find tests -name "*.py" -type f | head -10
-        
-    - name: Execute Comprehensive Test Suite with Coverage
-      run: |
-        # Set up test environment variables for security testing
         export AI_SRE_DB_PATH="./data/lancedb"
         export AI_SRE_AUDIT_LOG_PATH="./data/audit/audit.jsonl"
         export AI_SRE_GATE_SECRET="test-secret-key-32chars"
         export AI_SRE_SALT="test-salt-key-32chars"
-        
-        # Configure Python path for pytest
-        export PYTHONPATH="${PWD}:${PYTHONPATH}"
-        
-        # Create necessary test directories
         mkdir -p data/lancedb data/audit
-        
-        # Execute pytest with EXACT coverage generation as specified
-        echo "🧪 Running pytest with full discovery..."
         pytest tests/ -v --tb=short --cov=src/ai_sre --cov-report=xml --cov-report=html
-        
-        # Verify coverage reports were generated
-        if [[ -f "coverage.xml" && -d "htmlcov" ]]; then
-          echo "✅ Coverage reports generated successfully:"
-          echo "   - coverage.xml: $(wc -l < coverage.xml) lines"
-          echo "   - htmlcov/: $(find htmlcov -name '*.html' | wc -l) HTML reports"
-        else
-          echo "❌ CRITICAL: Coverage reports not generated!"
-          echo "Available files:"
-          find . -name "*.xml" -o -name "htmlcov" -type d 2>/dev/null | head -10
-          echo "🔍 Directory structure:"
-          find . -type d -name "src" -o -name "tests" | head -5
-          exit 1
-        fi
-        
-        # Generate coverage summary for logging
-        if command -v coverage >/dev/null 2>&1; then
-          coverage report --format=total
-        fi
-        
-    - name: Upload Test Coverage Reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-coverage-reports
-        path: |
-          coverage.xml
-          htmlcov/
-        retention-days: 30
-        
-    - name: Security Vulnerability Scan
-      run: |
-        # Install bandit for security scanning
-        pip install --no-cache-dir bandit==1.7.10
-        
-        # Perform security analysis on source code
-        bandit -r src/ai_sre \
-          -f json \
-          -o bandit-report.json \
-          -q \
-          --exit-zero
-          
-        # Check for high/critical security issues (non-zero exit for critical issues only)
-        python -c "
-        import json
-        try:
-            data = json.load(open('bandit-report.json'))
-            high_issues = [i for i in data['results'] if i['issue_severity'] in ['HIGH', 'CRITICAL']]
-            print(f'🔍 Security scan completed: {len(high_issues)} high/critical issues detected')
-            if len(high_issues) > 5:
-                print('⚠️  WARNING: More than 5 high/critical issues - review recommended')
-        except Exception as e:
-            print(f'❌ Security scan failed: {e}')
-            exit(1)
-        "
-        
-    - name: Generate Security Compliance Report
-      run: |
-        # Create comprehensive security compliance report
-        cat > security-compliance-report.md << EOF
-        # Security Compliance Report - $(date -u +%Y-%m-%dT%H:%M:%SZ)
-        
-        ## Quality Gate Summary
-        - ✅ Ruff Linting: PASSED
-        - ✅ Mypy Type Checking: PASSED  
-        - ✅ Pytest Suite: PASSED
-        - ✅ Coverage Validation: PASSED
-        - ✅ Security Scanning: PASSED
-        
-        ## Dependencies Security Status
-        - Core Dependencies: All versions validated
-        - Pydantic Security: Schema validation enabled
-        - Cryptography: HSM-grade encryption
-        - Kubernetes Client: Signed certificate validation
-        
-        ## Code Quality Metrics
-        - Lines of Code: $(find src/ -name "*.py" -exec wc -l {} + | tail -1 | cut -d' ' -f1)
-        - Type Annotations: 100% compliance
-        - Test Coverage: $(python -c "import subprocess; result = subprocess.run(['pytest', 'tests/', '--cov=src/ai_sre', '--cov-report=json', '--quiet'], capture_output=True, text=True); import json; data = json.loads(result.stdout); print(f'{data['coverage']['coverage_percentage']}%')")
-        - Documentation Coverage: 95%+
-        
-        ## Security Controls Active
-        - Two-Phase Execution Gate (2PC)
-        - Level B Fintech Guardrails
-        - SOC2/PCI-DSS Compliance Controls
-        - Immutable Audit Trails
-        - Local-First RAG Architecture
-        
-        ## Build Metadata
-        - Runner: Ubuntu 24.04 LTS
-        - Python: 3.13
-        - Pipeline Version: 2.1.2
-        - Build Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-        EOF
-        
-        echo "✅ Security compliance report generated"
-        
-    - name: Compliance Validation Final Review
-      run: |
-        # Final validation checklist
-        echo "## 🎯 CI Pipeline Quality Gates Validation" > validation-results.md
-        echo "- [x] Repository Checkout: ✅" >> validation-results.md
-        echo "- [x] Python Environment: ✅" >> validation-results.md  
-        echo "- [x] Dependency Installation: ✅" >> validation-results.md
-        echo "- [x] Ruff Linting: ✅" >> validation-results.md
-        echo "- [x] Mypy Type Checking: ✅" >> validation-results.md
-        echo "- [x] Test Suite Execution: ✅" >> validation-results.md
-        echo "- [x] Coverage Generation: ✅" >> validation-results.md
-        echo "- [x] Security Scanning: ✅" >> validation-results.md
-        echo "- [x] Coverage Validation: ✅" >> validation-results.md
-        echo "" >> validation-results.md
-        echo "## 🏆 Pipeline Status: PRODUCTION READY ✅" >> validation-results.md
-        echo "All quality gates passed. Code is ready for deployment." >> validation-results.md
-        
-        cat validation-results.md
-        
-    - name: Cleanup Temporary Files
-      if: always()
-      run: |
-        # Clean up temporary files to maintain workspace size
-        rm -rf data/lancedb data/audit .coverage .pytest_cache
-        echo "✅ Cleanup completed"
