@@ -277,3 +277,4 @@ jobs:
         # Clean up temporary files to maintain workspace size
         rm -rf data/lancedb data/audit .coverage .pytest_cache
         echo "✅ Cleanup completed"
+        
